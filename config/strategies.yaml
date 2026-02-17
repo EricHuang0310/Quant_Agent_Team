@@ -1,0 +1,26 @@
+momentum:
+  fast_period: 12
+  slow_period: 26
+  signal_period: 9
+  rsi_period: 14
+  rsi_overbought: 70
+  rsi_oversold: 30
+  atr_period: 14
+  trend_ema_period: 50
+  adx_period: 14
+
+mean_reversion:
+  bb_period: 20
+  bb_std: 2.0
+  rsi_period: 14
+  rsi_overbought: 75
+  rsi_oversold: 25
+  zscore_entry: 2.0
+  zscore_exit: 0.5
+
+grid:
+  grid_levels: 10
+  grid_spacing_pct: 0.5
+  position_per_grid: 0.02
+  range_lookback_days: 7
+  adx_threshold: 20
