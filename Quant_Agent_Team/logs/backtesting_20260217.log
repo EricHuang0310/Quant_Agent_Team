@@ -1,0 +1,11 @@
+2026-02-17 09:16:06,834 | backtesting          | INFO    | Backtest complete: momentum | Return=-1.88% | Sharpe=-2.65 | MaxDD=3.06% | Trades=28
+2026-02-17 09:16:43,869 | backtesting          | INFO    | Backtest complete: momentum | Return=-1.88% | Sharpe=-2.65 | MaxDD=3.06% | Trades=28
+2026-02-17 14:33:20,272 | backtesting          | INFO    | Backtest complete: momentum | Return=-12.53% | Sharpe=-3.11 | MaxDD=15.14% | Trades=385
+2026-02-17 14:34:36,955 | backtesting          | INFO    | Backtest complete: mean_reversion | Return=-15.61% | Sharpe=-1.88 | MaxDD=30.57% | Trades=44
+2026-02-17 14:34:46,036 | backtesting          | INFO    | Backtest complete: grid | Return=0.07% | Sharpe=0.55 | MaxDD=0.45% | Trades=81
+2026-02-17 14:35:28,601 | backtesting          | INFO    | Backtest complete: momentum | Return=-12.54% | Sharpe=-3.12 | MaxDD=15.14% | Trades=382
+2026-02-17 14:35:28,602 | backtesting          | INFO    |   momentum: return=-12.54%, sharpe=-3.12
+2026-02-17 14:36:27,263 | backtesting          | INFO    | Backtest complete: mean_reversion | Return=-15.62% | Sharpe=-1.88 | MaxDD=30.57% | Trades=44
+2026-02-17 14:36:27,264 | backtesting          | INFO    |   mean_reversion: return=-15.62%, sharpe=-1.88
+2026-02-17 14:36:58,764 | backtesting          | INFO    | Backtest complete: grid | Return=0.08% | Sharpe=0.56 | MaxDD=0.45% | Trades=76
+2026-02-17 14:36:58,765 | backtesting          | INFO    |   grid: return=0.08%, sharpe=0.56

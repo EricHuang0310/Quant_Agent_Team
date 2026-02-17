@@ -1,0 +1,7 @@
+2026-02-17 14:31:58,185 | main                 | INFO    | Running backtests from 2025-11-19 to 2026-02-17
+2026-02-17 14:31:58,185 | main                 | INFO    | Symbols: ['BTC/USD', 'ETH/USD', 'SOL/USD']
+2026-02-17 14:31:58,185 | main                 | INFO    | 
+2026-02-17 14:31:58,185 | main                 | INFO    | --- Backtesting: momentum ---
+2026-02-17 14:33:20,272 | main                 | INFO    | --- Backtesting: mean_reversion ---
+2026-02-17 14:34:36,956 | main                 | INFO    | --- Backtesting: grid ---
+2026-02-17 14:34:46,037 | main                 | INFO    | --- Backtesting: blended (equal weight) ---
