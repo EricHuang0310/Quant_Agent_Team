@@ -5,6 +5,7 @@ from enum import Enum
 from typing import Dict, List, Optional
 
 import anthropic
+import pandas as pd
 from alpaca.data.timeframe import TimeFrame
 
 from agents.base_agent import BaseStrategyAgent
@@ -72,35 +73,70 @@ class MetaAgent:
         self._allocation_history: List[AllocationDecision] = []
         self._cycle_count = 0
 
+    # Weights for multi-asset regime detection (BTC dominant, ETH as confirmation)
+    _REGIME_ASSETS = [("BTC/USD", 0.6), ("ETH/USD", 0.4)]
+
+    def _compute_asset_regime_score(self, symbol: str) -> dict:
+        """Compute regime indicators for a single asset."""
+        df = self.market_data.get_bars(symbol, TimeFrame.Hour, lookback_days=14)
+        if len(df) < 50:
+            return {}
+
+        adx_df = Indicators.adx(df, 14)
+        adx_val = adx_df["ADX_14"].iloc[-1]
+        ema_20 = Indicators.ema(df, 20).iloc[-1]
+        ema_50 = Indicators.ema(df, 50).iloc[-1]
+        close = df.iloc[-1]["close"]
+
+        returns = df["close"].pct_change().dropna()
+        vol = returns.tail(20).std() * (24 ** 0.5)
+
+        if pd.isna(adx_val):
+            adx_val = 0.0
+
+        if close > ema_20 > ema_50:
+            direction = 1.0
+        elif close < ema_20 < ema_50:
+            direction = -1.0
+        else:
+            direction = 0.0
+
+        return {"adx": adx_val, "direction": direction, "vol": vol}
+
     def detect_regime(self) -> MarketRegime:
-        """Quantitative regime detection based on BTC (market leader)."""
+        """Weighted multi-asset regime detection using BTC and ETH."""
         try:
-            df = self.market_data.get_bars("BTC/USD", TimeFrame.Hour, lookback_days=14)
-            if len(df) < 50:
+            weighted_adx = 0.0
+            weighted_direction = 0.0
+            weighted_vol = 0.0
+            total_weight = 0.0
+
+            for symbol, weight in self._REGIME_ASSETS:
+                try:
+                    metrics = self._compute_asset_regime_score(symbol)
+                    if not metrics:
+                        continue
+                    weighted_adx += metrics["adx"] * weight
+                    weighted_direction += metrics["direction"] * weight
+                    weighted_vol += metrics["vol"] * weight
+                    total_weight += weight
+                except Exception as e:
+                    logger.warning(f"Regime data unavailable for {symbol}: {e}")
+
+            if total_weight == 0:
                 return MarketRegime.RANGING
 
-            adx_df = Indicators.adx(df, 14)
-            adx_val = adx_df["ADX_14"].iloc[-1]
-            rsi = Indicators.rsi(df, 14).iloc[-1]
-            ema_20 = Indicators.ema(df, 20).iloc[-1]
-            ema_50 = Indicators.ema(df, 50).iloc[-1]
-            close = df.iloc[-1]["close"]
+            adx_val = weighted_adx / total_weight
+            direction = weighted_direction / total_weight
+            vol = weighted_vol / total_weight
 
-            # Volatility: 20-period std of returns
-            returns = df["close"].pct_change().dropna()
-            vol = returns.tail(20).std() * (24 ** 0.5)  # annualize hourly
-
-            # Determine regime
-            if adx_val != adx_val:
-                return MarketRegime.RANGING
-
-            if vol > 0.04:  # very high hourly vol
+            if vol > 0.04:
                 return MarketRegime.HIGH_VOLATILITY
 
             if adx_val > 30:
-                if close > ema_20 > ema_50:
+                if direction > 0.3:
                     return MarketRegime.STRONG_TREND_UP if adx_val > 40 else MarketRegime.TREND_UP
-                elif close < ema_20 < ema_50:
+                elif direction < -0.3:
                     return MarketRegime.STRONG_TREND_DOWN if adx_val > 40 else MarketRegime.TREND_DOWN
 
             return MarketRegime.RANGING

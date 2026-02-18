@@ -1,3 +1,4 @@
+import pandas as pd
 from alpaca.data.timeframe import TimeFrame
 
 from agents.base_agent import BaseStrategyAgent, Signal, TradeSignal
@@ -47,7 +48,7 @@ class MeanReversionAgent(BaseStrategyAgent):
         rsi_val = rsi.iloc[-1]
 
         # Handle NaN
-        if z != z or rsi_val != rsi_val:
+        if pd.isna(z) or pd.isna(rsi_val):
             return TradeSignal(
                 symbol=symbol, signal=Signal.HOLD,
                 confidence=0.0, target_position_pct=0.0,
@@ -103,9 +104,9 @@ class MeanReversionAgent(BaseStrategyAgent):
             metadata={
                 "zscore": float(z),
                 "rsi": float(rsi_val),
-                "bb_lower": float(bb_lower) if bb_lower == bb_lower else 0.0,
-                "bb_upper": float(bb_upper) if bb_upper == bb_upper else 0.0,
-                "bb_mid": float(bb_mid) if bb_mid == bb_mid else 0.0,
+                "bb_lower": 0.0 if pd.isna(bb_lower) else float(bb_lower),
+                "bb_upper": 0.0 if pd.isna(bb_upper) else float(bb_upper),
+                "bb_mid": 0.0 if pd.isna(bb_mid) else float(bb_mid),
                 "close": float(close),
             },
         )

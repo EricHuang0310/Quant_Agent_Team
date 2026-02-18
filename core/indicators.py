@@ -47,5 +47,5 @@ class Indicators:
     @staticmethod
     def volatility(df: pd.DataFrame, period: int = 20) -> pd.Series:
         """Annualized volatility based on log returns."""
-        log_ret = df["close"].pct_change().apply(lambda x: np.log1p(x) if x == x else x)
+        log_ret = df["close"].pct_change().apply(lambda x: np.log1p(x) if not pd.isna(x) else x)
         return log_ret.rolling(period).std() * (252 ** 0.5)

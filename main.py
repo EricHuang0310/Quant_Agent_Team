@@ -27,8 +27,12 @@ from core.broker import AlpacaBroker
 from core.market_data import MarketDataService
 from core.portfolio import PortfolioManager
 from utils.logger import setup_logger
+from utils.notifier import Notifier
 
 logger = setup_logger("main")
+
+# Circuit breaker auto-recovery after N cycles of drawdown being below threshold
+CIRCUIT_BREAKER_COOLDOWN_CYCLES = 30
 
 
 def load_strategy_configs() -> dict:
@@ -59,6 +63,7 @@ def build_system() -> dict:
     meta_agent = MetaAgent(
         settings.meta_agent, strategies, risk_agent, portfolio, market_data
     )
+    notifier = Notifier()
 
     return {
         "broker": broker,
@@ -68,6 +73,7 @@ def build_system() -> dict:
         "risk_agent": risk_agent,
         "execution_agent": exec_agent,
         "meta_agent": meta_agent,
+        "notifier": notifier,
     }
 
 
@@ -79,6 +85,8 @@ def run_trading_loop(system: dict):
     exec_agent = system["execution_agent"]
     meta_agent = system["meta_agent"]
     risk_agent = system["risk_agent"]
+    notifier = system["notifier"]
+    grid_agent = strategies.get("grid")
 
     # Graceful shutdown
     running = True
@@ -101,6 +109,8 @@ def run_trading_loop(system: dict):
 
     cycle_count = 0
     rebalance_interval = settings.meta_agent.rebalance_interval_minutes
+    last_daily_reset_date = datetime.now(timezone.utc).date()
+    circuit_breaker_triggered_cycle = None
 
     while running:
         try:
@@ -109,8 +119,41 @@ def run_trading_loop(system: dict):
             logger.info(f"{'='*60}")
             logger.info(f"Cycle {cycle_count}")
 
+            # 0. Daily loss counter reset on date change
+            today = datetime.now(timezone.utc).date()
+            if today != last_daily_reset_date:
+                risk_agent.reset_daily_counters()
+                last_daily_reset_date = today
+                logger.info("New day detected — daily risk counters reset")
+
             # 1. Sync portfolio state from broker
             portfolio.sync_from_broker()
+
+            # 1b. Circuit breaker auto-recovery check
+            risk_state = risk_agent.get_risk_state()
+            if risk_state["circuit_breaker_active"]:
+                if circuit_breaker_triggered_cycle is None:
+                    circuit_breaker_triggered_cycle = cycle_count
+
+                cycles_since = cycle_count - circuit_breaker_triggered_cycle
+                if cycles_since >= CIRCUIT_BREAKER_COOLDOWN_CYCLES:
+                    # Check if drawdown has recovered below threshold
+                    account = broker.get_account()
+                    equity = account["equity"]
+                    hwm = risk_state["high_water_mark"]
+                    current_dd = (hwm - equity) / hwm if hwm > 0 else 0
+                    if current_dd < risk_state["max_drawdown_pct"] * 0.5:
+                        risk_agent.reset_circuit_breaker()
+                        circuit_breaker_triggered_cycle = None
+                        logger.info(
+                            f"Circuit breaker auto-recovered after {cycles_since} cycles "
+                            f"(drawdown={current_dd:.2%})"
+                        )
+                        notifier.notify(
+                            f"Circuit breaker auto-recovered (drawdown={current_dd:.2%})"
+                        )
+            else:
+                circuit_breaker_triggered_cycle = None
 
             # 2. Meta-agent rebalance (every N cycles)
             if cycle_count == 1 or cycle_count % rebalance_interval == 0:
@@ -161,12 +204,33 @@ def run_trading_loop(system: dict):
                 blocked = [r for r in results if r["status"] == "blocked"]
                 if filled:
                     logger.info(f"  Executed: {len(filled)} orders")
+                    for f_result in filled:
+                        notifier.notify(
+                            f"Order filled: {f_result['side']} {f_result['qty']:.6f} "
+                            f"{f_result['symbol']} (${f_result['value']:,.2f}) "
+                            f"[{f_result['strategy']}]"
+                        )
                 if blocked:
                     logger.info(f"  Blocked: {len(blocked)} orders")
             else:
                 logger.info("  No actionable signals this cycle")
 
-            # 5. Log performance summary
+            # 5. Place stop-loss orders for new positions
+            stop_results = exec_agent.check_and_place_stop_losses()
+            if stop_results:
+                logger.info(f"  Stop-losses placed: {len(stop_results)}")
+
+            # 6. Execute grid limit orders
+            if grid_agent and grid_agent.is_active:
+                grid_results = exec_agent.execute_grid_orders(
+                    grid_agent, settings.trading.symbols
+                )
+                if grid_results:
+                    placed = [r for r in grid_results if r["status"] == "placed"]
+                    if placed:
+                        logger.info(f"  Grid orders placed: {len(placed)}")
+
+            # 7. Log performance summary
             perf = portfolio.get_performance_summary()
             logger.info(
                 f"  Portfolio: equity=${perf['equity']:,.2f} | "

@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
+import pandas as pd
 from alpaca.data.timeframe import TimeFrame
 from alpaca.trading.enums import OrderSide
 
@@ -80,7 +81,7 @@ class GridAgent(BaseStrategyAgent):
         adx_col = f"ADX_{self.config.get('adx_period', 14)}"
         adx_val = adx_df[adx_col].iloc[-1]
 
-        if adx_val != adx_val:  # NaN check
+        if pd.isna(adx_val):
             adx_val = 30  # assume trending if we can't compute
 
         adx_threshold = self.config.get("adx_threshold", 20)

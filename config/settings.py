@@ -1,16 +1,20 @@
 import os
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import List
 
 from dotenv import load_dotenv
 
-load_dotenv()
+# Load .env from project root or config/ directory
+_project_root = Path(__file__).resolve().parent.parent
+load_dotenv(_project_root / ".env")
+load_dotenv(_project_root / "config" / ".env")
 
 
 @dataclass
 class AlpacaConfig:
     api_key: str = os.getenv("ALPACA_API_KEY", "")
-    secret_key: str = os.getenv("ALPACA_SECRET_KEY", "")
+    secret_key: str = os.getenv("ALPACA_SECRET_KEY", "") or os.getenv("ALPACA_API_SECRET", "")
     paper: bool = os.getenv("ALPACA_PAPER", "true").lower() == "true"
 
 

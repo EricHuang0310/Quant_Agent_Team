@@ -1,3 +1,4 @@
+import pandas as pd
 from alpaca.data.timeframe import TimeFrame
 
 from agents.base_agent import BaseStrategyAgent, Signal, TradeSignal
@@ -80,7 +81,7 @@ class MomentumAgent(BaseStrategyAgent):
                     confidence = min(confidence + 0.1, 1.0)
 
         # ATR-based stop loss (2x ATR as % of price)
-        stop_loss_pct = (2.0 * atr_val / close) if close > 0 and atr_val == atr_val else 0.05
+        stop_loss_pct = (2.0 * atr_val / close) if close > 0 and not pd.isna(atr_val) else 0.05
 
         target_pct = confidence * 0.8 if signal in (Signal.BUY, Signal.STRONG_BUY) else 0.0
 
@@ -91,11 +92,11 @@ class MomentumAgent(BaseStrategyAgent):
             target_position_pct=target_pct,
             stop_loss_pct=stop_loss_pct,
             metadata={
-                "macd_hist": float(macd_hist) if macd_hist == macd_hist else 0.0,
-                "rsi": float(rsi_val) if rsi_val == rsi_val else 0.0,
-                "adx": float(adx_val) if adx_val == adx_val else 0.0,
+                "macd_hist": 0.0 if pd.isna(macd_hist) else float(macd_hist),
+                "rsi": 0.0 if pd.isna(rsi_val) else float(rsi_val),
+                "adx": 0.0 if pd.isna(adx_val) else float(adx_val),
                 "ema_trend": "up" if above_trend else "down",
-                "atr": float(atr_val) if atr_val == atr_val else 0.0,
+                "atr": 0.0 if pd.isna(atr_val) else float(atr_val),
             },
         )
 

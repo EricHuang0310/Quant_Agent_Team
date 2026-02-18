@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set
 
 from core.broker import AlpacaBroker
 from utils.logger import setup_logger
@@ -33,13 +33,16 @@ class PortfolioManager:
     """Central portfolio state, synced from Alpaca account.
 
     Tracks per-strategy allocations and positions for capital isolation.
+    Uses (symbol, strategy) composite tracking to allow multiple strategies
+    to hold positions in the same symbol simultaneously.
     """
 
     def __init__(self, broker: AlpacaBroker, total_capital: float = 100_000.0):
         self._broker = broker
         self._total_capital = total_capital
         self._allocations: Dict[str, StrategyAllocation] = {}
-        self._position_strategy_map: Dict[str, str] = {}  # symbol -> strategy
+        # symbol -> set of strategies that own positions in it
+        self._position_strategy_map: Dict[str, Set[str]] = {}
         self._trade_log: List[dict] = []
         self._equity_history: List[dict] = []
 
@@ -49,27 +52,39 @@ class PortfolioManager:
         self._total_capital = account["equity"]
 
         positions = self._broker.get_all_positions()
-        all_position_infos: Dict[str, PositionInfo] = {}
+
+        # Build per-strategy position infos.
+        # Alpaca only tracks one aggregate position per symbol, so we
+        # split the position proportionally across strategies that own it.
+        strategy_positions: Dict[str, List[PositionInfo]] = {
+            name: [] for name in self._allocations
+        }
+
         for p in positions:
             symbol = p.symbol
-            strategy = self._position_strategy_map.get(symbol, "unassigned")
-            info = PositionInfo(
-                symbol=symbol,
-                qty=float(p.qty),
-                avg_entry_price=float(p.avg_entry_price),
-                current_price=float(p.current_price),
-                market_value=float(p.market_value),
-                unrealized_pnl=float(p.unrealized_pl),
-                unrealized_pnl_pct=float(p.unrealized_plpc),
-                strategy=strategy,
-            )
-            all_position_infos[symbol] = info
+            strategies = self._position_strategy_map.get(symbol, set())
+            if not strategies:
+                strategies = {"unassigned"}
+
+            # Split position equally across owning strategies
+            n = len(strategies)
+            for strat in strategies:
+                info = PositionInfo(
+                    symbol=symbol,
+                    qty=float(p.qty) / n,
+                    avg_entry_price=float(p.avg_entry_price),
+                    current_price=float(p.current_price),
+                    market_value=float(p.market_value) / n,
+                    unrealized_pnl=float(p.unrealized_pl) / n,
+                    unrealized_pnl_pct=float(p.unrealized_plpc),
+                    strategy=strat,
+                )
+                if strat in strategy_positions:
+                    strategy_positions[strat].append(info)
 
         # Update allocations with actual positions
         for name, alloc in self._allocations.items():
-            alloc.positions = [
-                p for p in all_position_infos.values() if p.strategy == name
-            ]
+            alloc.positions = strategy_positions.get(name, [])
             total_mv = sum(p.market_value for p in alloc.positions)
             alloc.current_pct = total_mv / self._total_capital if self._total_capital > 0 else 0.0
             alloc.capital_allocated = self._total_capital * alloc.target_pct
@@ -99,7 +114,15 @@ class PortfolioManager:
         return max(0.0, alloc.capital_allocated - used)
 
     def assign_position_to_strategy(self, symbol: str, strategy: str):
-        self._position_strategy_map[symbol] = strategy
+        if symbol not in self._position_strategy_map:
+            self._position_strategy_map[symbol] = set()
+        self._position_strategy_map[symbol].add(strategy)
+
+    def remove_position_from_strategy(self, symbol: str, strategy: str):
+        if symbol in self._position_strategy_map:
+            self._position_strategy_map[symbol].discard(strategy)
+            if not self._position_strategy_map[symbol]:
+                del self._position_strategy_map[symbol]
 
     def get_position(self, symbol: str, strategy: Optional[str] = None) -> Optional[PositionInfo]:
         if strategy:
@@ -115,7 +138,11 @@ class PortfolioManager:
         self._trade_log.append(trade)
         # Track which strategy owns this symbol
         if "symbol" in trade and "strategy" in trade:
-            self.assign_position_to_strategy(trade["symbol"], trade["strategy"])
+            side = trade.get("side", "")
+            if side == "sell":
+                self.remove_position_from_strategy(trade["symbol"], trade["strategy"])
+            else:
+                self.assign_position_to_strategy(trade["symbol"], trade["strategy"])
 
     def get_performance_summary(self) -> dict:
         account = self._broker.get_account()

@@ -3,24 +3,24 @@ momentum:
   slow_period: 26
   signal_period: 9
   rsi_period: 14
-  rsi_overbought: 70
-  rsi_oversold: 30
+  rsi_overbought: 75      # widened from 70 for crypto volatility
+  rsi_oversold: 25         # widened from 30 for crypto volatility
   atr_period: 14
   trend_ema_period: 50
   adx_period: 14
 
 mean_reversion:
   bb_period: 20
-  bb_std: 2.0
+  bb_std: 2.5              # widened from 2.0 for crypto volatility
   rsi_period: 14
-  rsi_overbought: 75
-  rsi_oversold: 25
-  zscore_entry: 2.0
+  rsi_overbought: 80       # widened from 75 for crypto volatility
+  rsi_oversold: 20         # widened from 25 for crypto volatility
+  zscore_entry: 2.5        # raised from 2.0 — less sensitive to normal crypto swings
   zscore_exit: 0.5
 
 grid:
   grid_levels: 10
-  grid_spacing_pct: 0.5
+  grid_spacing_pct: 1.0    # doubled from 0.5 for wider crypto ranges
   position_per_grid: 0.02
   range_lookback_days: 7
-  adx_threshold: 20
+  adx_threshold: 25        # raised from 20 — crypto often has higher baseline ADX
